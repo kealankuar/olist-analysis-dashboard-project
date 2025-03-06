@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Olist E-commerce Analysis
 
 This repository contains a comprehensive analysis of the Olist e-commerce dataset. I aim to uncover insights related to customer behavior, shipping times, geospatial patterns, and more. 
@@ -21,3 +22,5 @@ This repository contains a comprehensive analysis of the Olist e-commerce datase
 ├── other_analysis/            # Additional analysis subfolder
 │   └── ...
 └── ...
+=======
+>>>>>>> geospatial-analysis
