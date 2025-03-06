@@ -190,21 +190,23 @@ def main():
         st.markdown("### K-Means Clustering on RFM Metrics")
         st.markdown(
             """
-            In this section, we perform **K-Means clustering** on the continuous RFM metrics (Recency, Frequency, Monetary) 
+            In this section, we perform K-Means clustering on the continuous RFM metrics (Recency, Frequency, Monetary)
             from the `rfm_df`. Adjust the slider below to change the number of clusters. The clustering is performed on the 
-            scaled numeric data, and the resulting clusters are displayed with a distinct color palette.
+            scaled numeric data, and the resulting clusters are displayed below. You can choose to view the clusters in a 
+            traditional 2D scatter plot or in an interactive 3D scatter plot.
             """
         )
-        # This slider is inside the tab, so it appears only when this tab is active.
+        
+        # Run K-Means clustering on the filtered RFM data
         k = st.slider("Select Number of Clusters (k)", min_value=2, max_value=10, value=4)
         df_clustered = rfm_df.copy()
         df_clustered = run_kmeans(df_clustered, n_clusters=k)
-
-        # Display cluster distribution
+        
         if "cluster" in df_clustered.columns:
+            # Show cluster counts in a bar chart
             cluster_counts = df_clustered["cluster"].value_counts().reset_index()
             cluster_counts.columns = ["Cluster", "Count"]
-            fig_cluster = px.bar(
+            fig_cluster_bar = px.bar(
                 cluster_counts, 
                 x="Cluster", 
                 y="Count",
@@ -212,24 +214,42 @@ def main():
                 color_discrete_sequence=px.colors.qualitative.Set2,
                 title="Customer Cluster Distribution"
             )
-            st.plotly_chart(fig_cluster, use_container_width=True)
-
-            st.markdown("#### 2D Scatter Plot of Clusters")
-            axis_options = ["recency", "frequency", "monetary"]
-            x_axis = st.selectbox("Select X-Axis", axis_options, index=0, key="x_axis")
-            y_axis = st.selectbox("Select Y-Axis", axis_options, index=1, key="y_axis")
-            fig_scatter = px.scatter(
-                df_clustered,
-                x=x_axis,
-                y=y_axis,
-                color="cluster",
-                hover_data=["customer_unique_id"],
-                color_discrete_sequence=px.colors.qualitative.Set2,
-                title=f"Clusters: {x_axis.capitalize()} vs. {y_axis.capitalize()}"
-            )
-            st.plotly_chart(fig_scatter, use_container_width=True)
+            st.plotly_chart(fig_cluster_bar, use_container_width=True)
+            
+            # Provide a toggle for 2D vs. 3D scatter plot
+            plot_type = st.radio("Select Plot Type", options=["2D Scatter", "3D Scatter"], index=0)
+            
+            if plot_type == "2D Scatter":
+                st.markdown("#### 2D Scatter Plot")
+                axis_options = ["recency", "frequency", "monetary"]
+                x_axis = st.selectbox("Select X-Axis", axis_options, index=0, key="x_axis")
+                y_axis = st.selectbox("Select Y-Axis", axis_options, index=1, key="y_axis")
+                fig_scatter = px.scatter(
+                    df_clustered,
+                    x=x_axis,
+                    y=y_axis,
+                    color="cluster",
+                    hover_data=["customer_unique_id"],
+                    color_discrete_sequence=px.colors.qualitative.Set2,
+                    title=f"Clusters: {x_axis.capitalize()} vs. {y_axis.capitalize()}"
+                )
+                st.plotly_chart(fig_scatter, use_container_width=True)
+            else:
+                st.markdown("#### 3D Scatter Plot")
+                # 3D scatter plot using recency, frequency, monetary
+                fig_3d = px.scatter_3d(
+                    df_clustered,
+                    x="recency",
+                    y="frequency",
+                    z="monetary",
+                    color="cluster",
+                    hover_data=["customer_unique_id"],
+                    color_discrete_sequence=px.colors.qualitative.Set2,
+                    title="3D Scatter Plot of RFM Clusters"
+                )
+                st.plotly_chart(fig_3d, use_container_width=True)
         else:
-            st.warning("K-Means clustering did not produce a 'cluster' column.")
+            st.warning("K-Means clustering did not produce a 'cluster' column. Please check your RFM data.")
 
     #####################################
     # TAB 4: COMBINED INSIGHT
