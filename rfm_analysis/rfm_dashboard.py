@@ -235,36 +235,97 @@ def main():
     # TAB 4: COMBINED INSIGHT
     #####################################
     with tab_combined:
-        st.markdown("### Combined Insight: Merging Item-Level and RFM Data")
+        st.markdown("### Combined Insight: Item-Level Data Enriched with Customer RFM Metrics")
         st.markdown(
             """
-            This tab merges the **item-level** data (`df_item`) with the **customer-level RFM metrics** (`rfm_df`) 
-            on the customer ID. Each row now represents an item with its corresponding customer's RFM metrics. 
-            This combined view can help you analyze how individual order details relate to customer segmentation.
+            In this section, we merge the **item-level** data (`df_item`) with the **customer-level RFM metrics** (`rfm_df`)
+            using the customer unique ID. Each row now represents an item with its corresponding customer's RFM values.
+            Use the sliders below to adjust the ranges for **Recency**, **Frequency**, and **Monetary**. The three graphs
+            below show the relationship between each RFM metric and the item's total price, with points colored by product category.
             """
         )
-        df_combined = pd.merge(
-            df_item, 
-            rfm_df, 
-            on="customer_unique_id", 
-            how="left"
-        )
-        st.write(f"Combined data has {df_combined.shape[0]} rows.")
-        # Example scatter plot: recency vs. total_price, colored by product category.
+        
+        # Merge df_item (filtered globally via the sidebar) with rfm_df (customer-level)
+        df_combined = pd.merge(df_item, rfm_df, on="customer_unique_id", how="left")
+        st.write("Combined data has", df_combined.shape[0], "rows.")
+        
+        # Sliders for adjusting RFM ranges within the Combined Insight tab
+        if "recency" in df_combined.columns:
+            rec_min = int(df_combined["recency"].min())
+            rec_max = int(df_combined["recency"].max())
+            rec_range = st.slider("Select Recency Range (days)", min_value=rec_min, max_value=rec_max, value=(rec_min, rec_max))
+        else:
+            rec_range = None
+
+        if "frequency" in df_combined.columns:
+            freq_min = int(df_combined["frequency"].min())
+            freq_max = int(df_combined["frequency"].max())
+            freq_range = st.slider("Select Frequency Range", min_value=freq_min, max_value=freq_max, value=(freq_min, freq_max))
+        else:
+            freq_range = None
+
+        if "monetary" in df_combined.columns:
+            mon_min = float(df_combined["monetary"].min())
+            mon_max = float(df_combined["monetary"].max())
+            mon_range = st.slider("Select Monetary Range", min_value=mon_min, max_value=mon_max, value=(mon_min, mon_max))
+        else:
+            mon_range = None
+
+        # Apply the slider filters to df_combined
+        if rec_range:
+            df_combined = df_combined[(df_combined["recency"] >= rec_range[0]) & (df_combined["recency"] <= rec_range[1])]
+        if freq_range:
+            df_combined = df_combined[(df_combined["frequency"] >= freq_range[0]) & (df_combined["frequency"] <= freq_range[1])]
+        if mon_range:
+            df_combined = df_combined[(df_combined["monetary"] >= mon_range[0]) & (df_combined["monetary"] <= mon_range[1])]
+        
+        st.write("After RFM filtering, combined data has", df_combined.shape[0], "rows.")
+        
+        # Now, create three scatter plots:
+        # Graph 1: Recency vs. Total Price
         if all(col in df_combined.columns for col in ["recency", "total_price", "product_category_name_en"]):
-            fig_comb = px.scatter(
+            fig1 = px.scatter(
                 df_combined.head(2000),
                 x="recency",
                 y="total_price",
                 color="product_category_name_en",
-                title="Recency vs. Total Price by Product Category",
+                title="Recency vs. Total Price (Colored by Product Category)",
                 hover_data=["customer_unique_id", "order_id"]
             )
-            st.plotly_chart(fig_comb, use_container_width=True)
+            st.plotly_chart(fig1, use_container_width=True)
         else:
-            st.warning("Required columns for combined analysis are missing.")
-        st.dataframe(df_combined.head(200))
+            st.warning("Missing columns for Recency vs. Total Price plot.")
 
+        # Graph 2: Frequency vs. Total Price
+        if all(col in df_combined.columns for col in ["frequency", "total_price", "product_category_name_en"]):
+            fig2 = px.scatter(
+                df_combined.head(2000),
+                x="frequency",
+                y="total_price",
+                color="product_category_name_en",
+                title="Frequency vs. Total Price (Colored by Product Category)",
+                hover_data=["customer_unique_id", "order_id"]
+            )
+            st.plotly_chart(fig2, use_container_width=True)
+        else:
+            st.warning("Missing columns for Frequency vs. Total Price plot.")
+
+        # Graph 3: Monetary vs. Total Price
+        if all(col in df_combined.columns for col in ["monetary", "total_price", "product_category_name_en"]):
+            fig3 = px.scatter(
+                df_combined.head(2000),
+                x="monetary",
+                y="total_price",
+                color="product_category_name_en",
+                title="Monetary vs. Total Price (Colored by Product Category)",
+                hover_data=["customer_unique_id", "order_id"]
+            )
+            st.plotly_chart(fig3, use_container_width=True)
+        else:
+            st.warning("Missing columns for Monetary vs. Total Price plot.")
+
+        st.dataframe(df_combined.head(200))
+        
     #####################################
     # TAB 5: DATA TABLES
     #####################################
