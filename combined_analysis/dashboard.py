@@ -297,7 +297,7 @@ def main():
                     hover_data=["customer_unique_id"],
                     color_discrete_sequence=px.colors.qualitative.Set2,
                     title="3D Scatter Plot of RFM Clusters",
-                    height=700
+                    height=1000
                 )
                 st.plotly_chart(fig_3d, use_container_width=True)
             else:  # Clustered Map
@@ -315,7 +315,7 @@ def main():
                         hover_data=["cluster"],
                         color="cluster",
                         zoom=map_zoom,
-                        height=700,
+                        height=1000,
                         title="Customer Locations (K-Means Clustering Results)",
                         mapbox_style="open-street-map"
                     )
