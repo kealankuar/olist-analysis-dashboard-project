@@ -196,48 +196,110 @@ def main():
         st.markdown("### Geospatial Analysis")
         st.markdown(
             """
-            This tab presents the geospatial data from `cleaned_data.pkl`. 
-            Use the state filter below to narrow down the customer locations.
-            Points are colored by product category.
+            This tab provides in-depth geospatial insights. In addition to the customer location scatter map,
+            we analyze shipping routes by grouping data by seller and customer municipality. The dashboard displays:
+             - Average Purchase-to-Delivery Days per route,
+             - Average Lateness,
+             - Average Price and Freight,
+             - Total number of orders per route.
+             
+            Routes are visualized on an interactive map with lines drawn between seller and customer locations.
             """
         )
-        # State filter with Select All option
-        if "customer_state" in geo_df.columns:
-            state_list = sorted(geo_df["customer_state"].dropna().unique().tolist())
-            select_all_states = st.checkbox("Select All States", value=True, key="select_all_states")
-            default_states = state_list if select_all_states else state_list[:5]
-            selected_states = st.multiselect("Filter by State", state_list, default=default_states)
-            geo_filtered = geo_df[geo_df["customer_state"].isin(selected_states)]
-        else:
-            geo_filtered = geo_df.copy()
         
-        # Merge product category info into geospatial data using customer_unique_id
-        geo_with_cat = geo_filtered.copy()
-        if ("customer_unique_id" in geo_with_cat.columns and 
-            "customer_unique_id" in df_item.columns and 
-            "product_category_name_en" in df_item.columns):
+        # Merge the customer-level RFM data with geospatial data on customer_unique_id
+        combined_df = pd.merge(rfm_df, geo_df, on="customer_unique_id", how="left")
+        
+        # Filter by Seller State using the seller_state_x column
+        if "seller_state_x" in combined_df.columns:
+            seller_states = sorted(combined_df["seller_state_x"].dropna().unique().tolist())
+            selected_origin_state = st.selectbox("Select Origin (Seller) State", seller_states)
+            combined_df = combined_df[combined_df["seller_state_x"] == selected_origin_state]
+            st.write(f"Routes filtered for seller state: {selected_origin_state}")
+        
+        # Compute route metrics from the filtered data
+        route_metrics = combined_df.groupby(["seller_code_muni", "customer_code_muni"], as_index=False).agg({
+            "purchase_to_delivery_days": "mean",
+            "lateness_days": "mean",
+            "order_id": "count",
+            "price": "mean",
+            "freight_value": "mean",
+            "seller_lat": "first",
+            "seller_lng": "first",
+            "customer_lat": "first",
+            "customer_lng": "first",
+            "seller_city": "first",
+            "customer_city": "first"
+        })
+        route_metrics.rename(columns={"order_id": "order_count"}, inplace=True)
+        
+        # Optional filters for routes based on order count and number of routes to display
+        min_orders = st.slider("Minimum Orders per Route", min_value=1, max_value=100, value=10)
+        route_metrics = route_metrics[route_metrics["order_count"] >= min_orders]
+        max_routes = st.slider("Maximum Number of Routes to Plot", min_value=10, max_value=200, value=50)
+        if route_metrics.shape[0] > max_routes:
+            route_metrics = route_metrics.nlargest(max_routes, "order_count")
+        
+        # Plot the filtered routes on the map using Plotly Graph Objects
+        import plotly.graph_objects as go
+        fig_routes = go.Figure()
+        for idx, row in route_metrics.iterrows():
+            # Color the route based on average delivery days
+            color = "red" if row["purchase_to_delivery_days"] > 15 else "green"
+            fig_routes.add_trace(go.Scattermapbox(
+                mode="lines",
+                lon=[row["seller_lng"], row["customer_lng"]],
+                lat=[row["seller_lat"], row["customer_lat"]],
+                line=dict(width=2, color=color),
+                name=f"{row['seller_code_muni']} → {row['customer_code_muni']}",
+                hoverinfo="text",
+                text=(
+                    f"Avg Delivery: {row['purchase_to_delivery_days']:.2f} days<br>"
+                    f"Avg Lateness: {row['lateness_days']:.2f} days<br>"
+                    f"Avg Price: ${row['price']:.2f}<br>"
+                    f"Avg Freight: ${row['freight_value']:.2f}<br>"
+                    f"Orders: {row['order_count']}<br>"
+                    f"Seller City: {row['seller_city']}<br>"
+                    f"Customer City: {row['customer_city']}"
+                )
+            ))
+        fig_routes.update_layout(
+            mapbox_style="open-street-map",
+            mapbox_zoom=4,
+            mapbox_center={"lat": combined_df["customer_lat"].mean(), "lon": combined_df["customer_lng"].mean()},
+            height=700,
+            title="Route Insights: Shipping Metrics by Route"
+        )
+        st.plotly_chart(fig_routes, use_container_width=True)
+    
+        # Optionally, display a detailed table of the route metrics
+        if st.checkbox("Show Detailed Route Metrics Table", key="show_route_table"):
+            st.dataframe(route_metrics)
+    
+        # Display a scatter map of raw customer locations, enriched with product category and additional customer info
+        st.markdown("#### Customer Locations by Product Category")
+        if "customer_lat" in geo_df.columns and "customer_lng" in geo_df.columns:
+            # Merge product category info from df_item based on customer_unique_id
             prod_cat = df_item[['customer_unique_id', 'product_category_name_en']].drop_duplicates(subset="customer_unique_id")
-            geo_with_cat = pd.merge(geo_with_cat, prod_cat, on="customer_unique_id", how="left")
-        
-        # Zoom level slider
-        zoom_level = st.slider("Map Zoom Level", min_value=1, max_value=15, value=3, key="zoom_geo")
-        if "customer_lat" in geo_with_cat.columns and "customer_lng" in geo_with_cat.columns:
+            geo_with_cat = pd.merge(geo_df, prod_cat, on="customer_unique_id", how="left")
+            
+            zoom_level = st.slider("Map Zoom Level", min_value=1, max_value=15, value=3, key="zoom_geo")
             fig_geo_raw = px.scatter_mapbox(
                 geo_with_cat,
                 lat="customer_lat",
                 lon="customer_lng",
                 hover_name="customer_unique_id",
-                hover_data=["product_category_name_en", "customer_state"],
+                hover_data=["product_category_name_en", "customer_state", "customer_city", "customer_zip_code_prefix"],
                 color="product_category_name_en",
                 zoom=zoom_level,
                 height=700,
-                title="Customer Locations (Raw Geospatial Data)",
-                mapbox_style="open-street-map"
+                title="Customer Locations (Colored by Product Category)"
             )
+            fig_geo_raw.update_layout(mapbox_style="open-street-map")
             st.plotly_chart(fig_geo_raw, use_container_width=True)
         else:
-            st.error("Geospatial columns 'customer_lat' and 'customer_lng' not found in the data.")
-        st.dataframe(geo_with_cat.head(50))
+            st.error("Geospatial columns 'customer_lat' and 'customer_lng' not found in geo data.")
+
 
     #####################################
     # TAB 4: K-MEANS CLUSTERING
